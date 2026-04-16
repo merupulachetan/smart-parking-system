@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — SmartPark{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Dashboard</h1>
+  <p>Welcome back, {{ user.full_name }} &nbsp;·&nbsp; {{ tz_label }}</p>
+</div>
+
+{% if notice %}
+  <div class="alert alert-success">✅ {{ notice }}</div>
+{% endif %}
+
+{% for w in warnings %}
+  <div class="alert alert-warn">⚠️ Slot <strong>{{ w.slot }}</strong> ({{ w.plate }}) expires in less than 10 min!</div>
+{% endfor %}
+
+<!-- Stats Row -->
+<div class="stats-grid">
+  <div class="stat-card green">
+    <span class="stat-icon">🟢</span>
+    <div class="stat-label">Available Slots</div>
+    <div class="stat-value">{{ available_count }}</div>
+    <div class="stat-sub">of {{ total_slots }} total</div>
+  </div>
+  <div class="stat-card red">
+    <span class="stat-icon">🔴</span>
+    <div class="stat-label">Occupied</div>
+    <div class="stat-value">{{ occupied_count }}</div>
+    <div class="stat-sub">active bookings</div>
+  </div>
+  <div class="stat-card purple">
+    <span class="stat-icon">💰</span>
+    <div class="stat-label">Wallet Balance</div>
+    <div class="stat-value">₹{{ "%.0f"|format(user.wallet_balance) }}</div>
+    <div class="stat-sub"><a href="/wallet" style="color:var(--accent2)">Top up →</a></div>
+  </div>
+  <div class="stat-card yellow">
+    <span class="stat-icon">📋</span>
+    <div class="stat-label">Active Bookings</div>
+    <div class="stat-value">{{ booking_cards|length }}</div>
+    <div class="stat-sub">currently parked</div>
+  </div>
+</div>
+
+<!-- Main Grid -->
+<div class="grid-2" style="margin-bottom:24px">
+
+  <!-- Active Bookings -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">🚗 Active Bookings</span>
+      <a href="/book" class="btn btn-sm btn-primary">+ Book</a>
+    </div>
+    {% if booking_cards %}
+      <div class="booking-list">
+        {% for b in booking_cards %}
+        <div class="booking-card {% if b.warning %}warning{% endif %}">
+          <div class="booking-plate">{{ b.plate }}</div>
+          <div class="booking-info">
+            <div class="booking-slot">{{ b.slot }}</div>
+            <div class="booking-time">Until {{ b.end_local }}</div>
+            {% if b.price_per_hour %}
+              <div style="font-size:0.75rem;color:var(--text2)">₹{{ "%.0f"|format(b.price_per_hour) }}/hr</div>
+            {% endif %}
+          </div>
+          <div class="timer-chip {% if b.warning %}warn{% endif %}" data-seconds="{{ b.remaining_seconds }}">--:--</div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">🅿️</div>
+        <p>No active bookings</p>
+        <a href="/book" class="btn btn-sm btn-primary" style="margin-top:12px">Book a Slot</a>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Slot Map -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">🗺️ Parking Map</span>
+      <span class="card-badge">Live</span>
+    </div>
+    <div style="margin-bottom:10px">
+      <span style="font-size:0.75rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.07em">Bikes (B)</span>
+      <div class="slots-container" style="margin:8px 0 14px">
+        {% for s in all_slots if s.slot_number.startswith('B') %}
+        <div class="slot {% if s.is_available %}available{% else %}occupied{% endif %}">
+          <span>{{ s.slot_number }}</span>
+          <span class="slot-label">{% if s.is_available %}Free{% else %}Busy{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <span style="font-size:0.75rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.07em">Cars (A)</span>
+      <div class="slots-container" style="margin:8px 0 14px">
+        {% for s in all_slots if s.slot_number.startswith('A') %}
+        <div class="slot {% if s.is_available %}available{% else %}occupied{% endif %}">
+          <span>{{ s.slot_number }}</span>
+          <span class="slot-label">{% if s.is_available %}Free{% else %}Busy{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
+      <span style="font-size:0.75rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.07em">Commercial (C)</span>
+      <div class="slots-container" style="margin:8px 0">
+        {% for s in all_slots if s.slot_number.startswith('C') %}
+        <div class="slot {% if s.is_available %}available{% else %}occupied{% endif %}">
+          <span>{{ s.slot_number }}</span>
+          <span class="slot-label">{% if s.is_available %}Free{% else %}Busy{% endif %}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════ -->
+<!--         AI PREDICTION SECTION              -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="card" style="margin-bottom:24px; border-color: rgba(0,212,255,0.2); background: linear-gradient(135deg, rgba(0,212,255,0.03) 0%, var(--surface) 60%);">
+  <div class="card-header" style="margin-bottom:20px">
+    <div>
+      <span class="card-title" style="font-size:1.1rem">🤖 AI Demand Prediction</span>
+      <div style="font-size:0.78rem;color:var(--text2);margin-top:3px">LSTM model · Next 6 hours · Powered by ML</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span id="pred-status" class="card-badge">Loading…</span>
+      <a href="/predictions/view" class="btn btn-sm btn-secondary">Full Report →</a>
+    </div>
+  </div>
+
+  <div id="ai-pred-content">
+    <div class="spinner"></div>
+  </div>
+</div>
+
+<!-- YOLO AI Vision CTA -->
+<div class="card" style="border: 1px solid rgba(124,58,237,0.3); background: linear-gradient(135deg, rgba(124,58,237,0.05) 0%, var(--surface) 60%);">
+  <div style="display:flex;align-items:center;gap:20px">
+    <div style="font-size:3rem">🔍</div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:1.05rem;margin-bottom:4px">YOLOv8 AI Vision — Slot Detection</div>
+      <div style="color:var(--text2);font-size:0.88rem">Upload a parking lot image and let our trained YOLO model detect occupied vs. free slots in real time.</div>
+    </div>
+    <a href="/ai-vision" class="btn btn-primary">Try AI Vision →</a>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(async function loadPredictions() {
+  try {
+    const res = await fetch('/predictions');
+    const data = await res.json();
+    const statusEl = document.getElementById('pred-status');
+    const contentEl = document.getElementById('ai-pred-content');
+    if (!data.predictions || data.predictions.length === 0) {
+      statusEl.textContent = 'No Data';
+      contentEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><p>No booking data yet for predictions.</p></div>';
+      return;
+    }
+    statusEl.textContent = 'Live';
+    statusEl.style.background = 'rgba(16,185,129,0.15)';
+    statusEl.style.color = 'var(--green)';
+    statusEl.style.borderColor = 'rgba(16,185,129,0.3)';
+
+    const maxVal = Math.max(...data.predictions.map(p => p.value), 1);
+    const rows = data.predictions.map(p => {
+      const pct = Math.round((p.value / maxVal) * 100);
+      const isHigh = p.value >= (maxVal * 0.65);
+      return `
+        <div class="pred-row">
+          <span class="pred-hour">${p.hour}</span>
+          <div class="pred-bar-wrap"><div class="pred-bar" style="width:${pct}%"></div></div>
+          <span class="pred-val">${p.value.toFixed(1)}</span>
+          <span class="${isHigh ? 'demand-high' : 'demand-low'}" style="margin-left:10px">${isHigh ? 'High' : 'Low'}</span>
+        </div>`;
+    }).join('');
+
+    contentEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 200px;gap:20px;align-items:start">
+        <div>${rows}</div>
+        <div>
+          <canvas id="miniChart" width="200" height="180"></canvas>
+        </div>
+      </div>`;
+
+    // Mini chart
+    const ctx = document.getElementById('miniChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.predictions.map(p => p.hour),
+        datasets: [{
+          data: data.predictions.map(p => p.value),
+          backgroundColor: data.predictions.map(p =>
+            p.value >= maxVal * 0.65 ? 'rgba(239,68,68,0.7)' : 'rgba(0,212,255,0.5)'
+          ),
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: false, plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#8892a4', font: { size: 9 } }, grid: { color: '#1e2330' } },
+          y: { ticks: { color: '#8892a4', font: { size: 9 } }, grid: { color: '#1e2330' } }
+        }
+      }
+    });
+  } catch(e) {
+    document.getElementById('pred-status').textContent = 'Error';
+    document.getElementById('ai-pred-content').innerHTML = '<div class="alert alert-error">Could not load predictions.</div>';
+  }
+})();
+</script>
+{% endblock %}

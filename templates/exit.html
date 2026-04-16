@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Exit Parking — SmartPark{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>🚦 Exit Parking</h1>
+  <p>Enter your plate number to check out</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">⚠️ {{ error }}</div>
+{% endif %}
+
+{% if result %}
+<div class="card" style="border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.05);margin-bottom:20px">
+  <div style="font-size:1.5rem;margin-bottom:10px">✅ Checked Out Successfully</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div>
+      <div style="font-size:0.75rem;color:var(--text2);text-transform:uppercase;font-weight:600;margin-bottom:4px">Plate</div>
+      <div style="font-family:var(--mono);font-size:1.1rem;font-weight:700">{{ result.plate }}</div>
+    </div>
+    <div>
+      <div style="font-size:0.75rem;color:var(--text2);text-transform:uppercase;font-weight:600;margin-bottom:4px">Slot</div>
+      <div style="font-family:var(--mono);font-size:1.1rem;font-weight:700">{{ result.slot }}</div>
+    </div>
+    <div>
+      <div style="font-size:0.75rem;color:var(--text2);text-transform:uppercase;font-weight:600;margin-bottom:4px">Duration</div>
+      <div style="font-family:var(--mono)">{{ result.duration }}</div>
+    </div>
+    <div>
+      <div style="font-size:0.75rem;color:var(--text2);text-transform:uppercase;font-weight:600;margin-bottom:4px">Amount Due</div>
+      <div style="font-family:var(--mono);font-size:1.3rem;font-weight:800;color:var(--accent)">₹{{ result.amount }}</div>
+    </div>
+  </div>
+  <a href="/dashboard" class="btn btn-primary" style="margin-top:16px">Back to Dashboard</a>
+</div>
+{% endif %}
+
+<div class="card" style="max-width:480px">
+  <div class="card-header"><span class="card-title">Vehicle Exit</span></div>
+  <form method="post" action="/exit">
+    <div class="form-group">
+      <label>Vehicle Number Plate</label>
+      <input type="text" name="plate_number" required placeholder="e.g. TN01AB1234"
+             style="text-transform:uppercase;font-family:var(--mono);font-size:1.1rem;letter-spacing:0.05em"/>
+    </div>
+    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">🚗 Process Exit</button>
+  </form>
+</div>
+{% endblock %}

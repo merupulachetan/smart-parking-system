@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}History — SmartPark{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── QR Modal overlay ── */
+.qr-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+.qr-overlay.open { opacity: 1; pointer-events: all; }
+
+/* ── QR Modal card ── */
+.qr-modal {
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(30px) saturate(200%);
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  border: 1.5px solid rgba(255,255,255,0.95);
+  border-radius: 26px;
+  padding: 38px 34px 26px;
+  text-align: center;
+  box-shadow: 0 28px 90px rgba(15,23,42,0.25), 0 0 0 1px rgba(14,165,233,0.10);
+  transform: scale(0.85) translateY(20px);
+  transition: transform 0.32s cubic-bezier(0.34,1.56,0.64,1);
+  max-width: 360px; width: 90%;
+}
+.qr-overlay.open .qr-modal { transform: scale(1) translateY(0); }
+
+/* ── QR image ── */
+.qr-modal img {
+  width: 230px; height: 230px;
+  border-radius: 16px;
+  border: 3px solid rgba(14,165,233,0.25);
+  box-shadow: 0 6px 28px rgba(14,165,233,0.18);
+  display: block; margin: 0 auto 20px;
+  cursor: pointer;
+}
+
+/* ── Modal text ── */
+.qr-modal-title {
+  font-size: 1.05rem; font-weight: 800; color: #0f172a;
+  margin-bottom: 3px; letter-spacing: -0.02em;
+}
+.qr-modal-sub  { font-size: 0.78rem; color: #475569; margin-bottom: 16px; }
+.qr-modal-hint {
+  font-size: 0.70rem; color: #94a3b8;
+  padding-top: 12px; border-top: 1px solid rgba(203,213,225,0.50);
+}
+
+/* ── No-QR placeholder inside modal ── */
+.qr-no-img {
+  width: 230px; height: 230px; border-radius: 16px;
+  background: rgba(14,165,233,0.06);
+  border: 2px dashed rgba(14,165,233,0.30);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  margin: 0 auto 20px; gap: 10px; color: #64748b;
+}
+.qr-no-img .qr-no-icon { font-size: 2.6rem; }
+.qr-no-img p { font-size: 0.82rem; font-weight: 600; }
+
+/* ── Generate button inside modal ── */
+.qr-gen-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 22px; border-radius: 12px; border: none;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: #fff; font-family: var(--font);
+  font-size: 0.88rem; font-weight: 700;
+  cursor: pointer; transition: all 0.2s;
+  box-shadow: 0 4px 16px rgba(14,165,233,0.32);
+  margin-bottom: 6px;
+}
+.qr-gen-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 22px rgba(14,165,233,0.42); }
+.qr-gen-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+/* ── View QR button in table ── */
+.qr-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px; border-radius: 8px;
+  background: rgba(14,165,233,0.12);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  color: #0284c7; font-family: var(--font);
+  font-size: 0.76rem; font-weight: 700;
+  cursor: pointer; transition: all 0.18s;
+  border: 1px solid rgba(14,165,233,0.25);
+}
+.qr-btn:hover { background: rgba(14,165,233,0.22); transform: translateY(-1px); box-shadow: 0 3px 10px rgba(14,165,233,0.22); }
+.qr-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+/* ── Spinner inside modal ── */
+.modal-spinner {
+  width: 34px; height: 34px;
+  border: 3px solid rgba(14,165,233,0.20);
+  border-top-color: #0ea5e9;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  margin: 10px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>🕐 Booking History</h1>
+  <p>All your past and active parkings &nbsp;·&nbsp; click <strong>View QR</strong> to see your entry code</p>
+</div>
+
+<div class="card">
+  {% if bookings %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Slot</th>
+        <th>Vehicle</th>
+        <th>Start</th>
+        <th>End</th>
+        <th>Price/hr</th>
+        <th>Status</th>
+        <th>QR Code</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in bookings %}
+      <tr>
+        <td style="font-family:var(--mono);color:var(--text2)">{{ b.id }}</td>
+        <td><strong style="font-family:var(--mono)">{{ b.slot.slot_number if b.slot else '—' }}</strong></td>
+        <td style="font-family:var(--mono)">{{ b.vehicle.plate_number if b.vehicle else '—' }}</td>
+        <td style="font-size:0.82rem;color:var(--text2)">{{ b.start_local }}</td>
+        <td style="font-size:0.82rem;color:var(--text2)">{{ b.end_local }}</td>
+        <td style="font-family:var(--mono)">{% if b.price_per_hour %}₹{{ "%.0f"|format(b.price_per_hour) }}{% else %}—{% endif %}</td>
+        <td>
+          {% if b.status == 'active' %}<span class="badge badge-active">Active</span>
+          {% elif b.status == 'completed' %}<span class="badge badge-completed">Done</span>
+          {% else %}<span class="badge badge-cancelled">Cancelled</span>{% endif %}
+        </td>
+
+        <!-- QR button -->
+        <td>
+          <button class="qr-btn"
+            data-booking-id="{{ b.id }}"
+            data-qr-url="{{ b.qr_url or '' }}"
+            data-slot="{{ b.slot.slot_number if b.slot else 'N/A' }}"
+            data-plate="{{ b.vehicle.plate_number if b.vehicle else 'N/A' }}"
+            onclick="openQR(this)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="3" height="3"/>
+              <rect x="18" y="14" width="3" height="3"/>
+              <rect x="14" y="18" width="3" height="3"/>
+              <rect x="18" y="18" width="3" height="3"/>
+            </svg>
+            View QR
+          </button>
+        </td>
+
+        <td>
+          {% if b.status == 'active' %}
+          <form method="post" action="/exit/{{ b.id }}">
+            <button type="submit" class="btn btn-sm btn-danger">Exit</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">🕐</div>
+    <p>No bookings yet.</p>
+    <a href="/book" class="btn btn-sm btn-primary" style="margin-top:12px">Book your first slot</a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ══════════════════════════════════════
+     QR MODAL
+══════════════════════════════════════ -->
+<div class="qr-overlay" id="qrOverlay" onclick="closeQR()">
+  <div class="qr-modal" id="qrModal" onclick="event.stopPropagation()">
+
+    <!-- dynamic content injected by JS -->
+    <div id="qrBody"></div>
+
+    <div class="qr-modal-title" id="qrTitle"></div>
+    <div class="qr-modal-sub"   id="qrSub"></div>
+    <div class="qr-modal-hint">🖱 Click the QR image · or anywhere outside · to close</div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let _currentBookingId = null;
+
+// ── Open modal ──────────────────────────────────────────────────────────────
+function openQR(btn) {
+  const bookingId = btn.dataset.bookingId;
+  const qrUrl     = btn.dataset.qrUrl;
+  const slot      = btn.dataset.slot;
+  const plate     = btn.dataset.plate;
+
+  _currentBookingId = bookingId;
+
+  document.getElementById('qrTitle').textContent = 'Slot ' + slot + '  ·  ' + plate;
+  document.getElementById('qrSub').textContent   = 'Scan to verify parking entry';
+
+  if (qrUrl && qrUrl.trim() !== '') {
+    renderQrImage(qrUrl);
+  } else {
+    renderNoQr(bookingId);
+  }
+
+  document.getElementById('qrOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+// ── Render actual QR image ──────────────────────────────────────────────────
+function renderQrImage(url) {
+  const cleanUrl = '/' + url.replace(/^\/+/, '');
+  document.getElementById('qrBody').innerHTML = `
+    <img src="${cleanUrl}" alt="QR Code"
+         onclick="closeQR()"
+         onerror="this.closest('#qrBody').innerHTML = noQrHtml(_currentBookingId)"
+         title="Click to close">
+  `;
+}
+
+// ── Render "no QR" placeholder with Generate button ────────────────────────
+function renderNoQr(bookingId) {
+  document.getElementById('qrBody').innerHTML = `
+    <div class="qr-no-img">
+      <span class="qr-no-icon">📋</span>
+      <p>QR not generated yet</p>
+    </div>
+    <button class="qr-gen-btn" id="genBtn" onclick="generateQR(${bookingId})">
+      ✨ Generate QR Code
+    </button>
+  `;
+}
+
+function noQrHtml(bookingId) {
+  return `
+    <div class="qr-no-img">
+      <span class="qr-no-icon">📋</span>
+      <p>QR not generated yet</p>
+    </div>
+    <button class="qr-gen-btn" id="genBtn" onclick="generateQR(${bookingId})">
+      ✨ Generate QR Code
+    </button>`;
+}
+
+// ── Generate QR via API ─────────────────────────────────────────────────────
+async function generateQR(bookingId) {
+  const btn = document.getElementById('genBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+
+  // Show spinner
+  document.getElementById('qrBody').innerHTML = `
+    <div class="qr-no-img"><div class="modal-spinner"></div><p>Creating QR…</p></div>
+  `;
+
+  try {
+    const res  = await fetch(`/booking/${bookingId}/generate-qr`, { method: 'POST' });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.detail || 'Failed');
+
+    // Update the table button so future clicks show the QR directly
+    const tableBtn = document.querySelector(`button[data-booking-id="${bookingId}"]`);
+    if (tableBtn) tableBtn.dataset.qrUrl = data.qr_url;
+
+    // Show the freshly generated QR
+    renderQrImage(data.qr_url);
+
+  } catch(err) {
+    document.getElementById('qrBody').innerHTML = `
+      <div class="qr-no-img">
+        <span class="qr-no-icon">⚠️</span>
+        <p style="color:#dc2626">Error: ${err.message}</p>
+      </div>
+      <button class="qr-gen-btn" onclick="generateQR(${bookingId})">🔄 Retry</button>
+    `;
+  }
+}
+
+// ── Close modal ─────────────────────────────────────────────────────────────
+function closeQR() {
+  document.getElementById('qrOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Escape key closes
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeQR(); });
+</script>
+{% endblock %}

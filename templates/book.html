@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+{% block title %}Book Slot — SmartPark{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Slot map tiles ── */
+.slot-map-section { margin-bottom: 18px; }
+.slot-map-label {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.09em; color: var(--text3); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.slot-map-label span {
+  padding: 2px 8px; border-radius: 20px; font-size: 0.65rem;
+  background: rgba(14,165,233,0.10); color: var(--accent-dark);
+  border: 1px solid rgba(14,165,233,0.20);
+}
+
+/* Hidden tier sections */
+.tier-section { transition: opacity 0.25s; }
+.tier-section.dimmed { opacity: 0.22; pointer-events: none; }
+.tier-section.hidden { display: none; }
+
+/* Slot tiles */
+.slot-tile {
+  width: 64px; height: 64px; border-radius: 12px; border: 2px solid;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 0.74rem; font-weight: 700;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.2s;
+  cursor: pointer; user-select: none;
+  position: relative;
+}
+.slot-tile .slot-name  { font-size: 0.82rem; font-weight: 800; }
+.slot-tile .slot-tier  { font-size: 0.58rem; opacity: 0.70; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.slot-tile.available {
+  border-color: var(--green);
+  background: rgba(5,150,105,0.10);
+  color: var(--green);
+}
+.slot-tile.available:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 18px rgba(5,150,105,0.28);
+  background: rgba(5,150,105,0.20);
+}
+.slot-tile.available.selected {
+  border-color: var(--accent);
+  background: rgba(14,165,233,0.18);
+  color: var(--accent-dark);
+  box-shadow: 0 0 0 3px rgba(14,165,233,0.30);
+  transform: scale(1.08);
+}
+.slot-tile.occupied {
+  border-color: rgba(220,38,38,0.35);
+  background: rgba(220,38,38,0.07);
+  color: rgba(220,38,38,0.55);
+  cursor: not-allowed;
+}
+.slot-tile.occupied::after {
+  content: '✕';
+  position: absolute; top: 4px; right: 6px;
+  font-size: 0.65rem; opacity: 0.5;
+}
+
+/* ── No-vehicle hint ── */
+.pick-vehicle-hint {
+  text-align: center; padding: 32px 20px;
+  color: var(--text3); border: 2px dashed rgba(14,165,233,0.25);
+  border-radius: 14px; background: rgba(14,165,233,0.04);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+.pick-vehicle-hint .hint-icon { font-size: 2.2rem; margin-bottom: 10px; }
+.pick-vehicle-hint p { font-size: 0.88rem; font-weight: 600; }
+
+/* ── Cost box ── */
+.cost-box {
+  padding: 12px 16px;
+  background: rgba(14,165,233,0.10);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(14,165,233,0.25);
+  border-radius: 10px;
+  font-family: var(--mono); font-size: 1.2rem; font-weight: 800;
+  color: var(--accent-dark); text-align: center;
+}
+
+/* ── Selected slot pill ── */
+.selected-slot-pill {
+  display: none; align-items: center; gap: 8px;
+  padding: 8px 14px; border-radius: 10px;
+  background: rgba(14,165,233,0.12);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(14,165,233,0.28);
+  font-size: 0.85rem; font-weight: 700; color: var(--accent-dark);
+  margin-bottom: 14px;
+}
+.selected-slot-pill.visible { display: flex; }
+.selected-slot-pill .clear-slot {
+  margin-left: auto; cursor: pointer; opacity: 0.6;
+  font-size: 0.75rem; font-weight: 600;
+}
+.selected-slot-pill .clear-slot:hover { opacity: 1; color: var(--red); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>＋ Book a Parking Slot</h1>
+  <p>Select your vehicle first — only compatible slots will be shown · ₹{{ price_per_hour }}/hr</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">⚠️ {{ error }}</div>
+{% endif %}
+
+<div class="grid-2">
+
+  <!-- ══ LEFT: Booking form ══ -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Booking Details</span></div>
+    <form method="post" action="/book" id="bookForm">
+
+      <!-- 1. Vehicle -->
+      <div class="form-group">
+        <label>① Select Vehicle</label>
+        <select name="vehicle_id" id="vehicleSelect" required>
+          <option value="">— Choose your vehicle first —</option>
+          {% for v in vehicles %}
+          <option value="{{ v.id }}"
+            data-group="{{ v | vehicle_group_attr }}"
+            {% if v.id in vehicles_with_active_booking %}disabled{% endif %}>
+            {% if (v | vehicle_group_attr) == 'bike' %}🏍️{% else %}🚗{% endif %}
+            {{ v.plate_number }} — {{ v.label or v.vehicle_type or 'Vehicle' }}
+            {% if v.id in vehicles_with_active_booking %} (active booking){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+        {% if not vehicles %}
+        <div style="margin-top:8px;font-size:0.82rem;color:var(--text2)">
+          No vehicles registered. <a href="/vehicles" style="color:var(--accent)">Add one →</a>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- 2. Hidden slot input (filled by clicking tiles) -->
+      <input type="hidden" name="slot_id" id="slotIdInput" required/>
+
+      <!-- Selected slot pill -->
+      <div class="selected-slot-pill" id="selectedPill">
+        <span>🅿</span>
+        <span id="pillText">—</span>
+        <span class="clear-slot" onclick="clearSlot()">✕ Change</span>
+      </div>
+
+      <div class="form-group" id="slotDropdownWrap" style="display:none">
+        <!-- kept for server fallback, hidden since tiles are used -->
+        <select name="slot_id_fallback" id="slotSelect" style="display:none">
+          {% for s in slots %}
+          <option value="{{ s.id }}" data-tier="{{ s.slot_tier }}">{{ s.slot_number }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- 3. Duration + Cost -->
+      <div class="grid-2">
+        <div class="form-group">
+          <label>② Duration (hours)</label>
+          <input type="number" name="duration_hours" min="1" max="24" value="2" id="hoursInput"/>
+        </div>
+        <div class="form-group">
+          <label>Estimated Cost</label>
+          <div class="cost-box" id="costDisplay">₹{{ "%.0f"|format(price_per_hour * 2) }}</div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" id="confirmBtn"
+        style="width:100%;justify-content:center;opacity:0.5;pointer-events:none" disabled>
+        🅿 Confirm Booking
+      </button>
+      <div id="confirmHint" style="text-align:center;font-size:0.78rem;color:var(--text3);margin-top:8px">
+        Select a vehicle and a slot to continue
+      </div>
+    </form>
+  </div>
+
+  <!-- ══ RIGHT: Visual slot map ══ -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">🗺 Available Slots</span>
+      <span class="card-badge" id="slotCountBadge">{{ slots|length }} free</span>
+    </div>
+
+    <!-- Shown before vehicle is picked -->
+    <div id="pickHint" class="pick-vehicle-hint">
+      <div class="hint-icon">👆</div>
+      <p>Select a vehicle on the left<br>to see compatible slots</p>
+    </div>
+
+    <!-- Slot map (shown after vehicle pick) -->
+    <div id="slotMap" style="display:none">
+
+      <!-- Bike tier -->
+      <div class="tier-section" id="tier-bike">
+        <div class="slot-map-label">
+          🏍️ Bike Slots (B–)
+          <span id="bike-count"></span>
+        </div>
+        <div class="slots-container" style="margin-bottom:18px" id="bike-tiles">
+          {% for s in slots if s.slot_tier == 'bike' %}
+          <div class="slot-tile available"
+               data-slot-id="{{ s.id }}"
+               data-slot-name="{{ s.slot_number }}"
+               data-tier="bike"
+               onclick="selectSlot(this)">
+            <span class="slot-name">{{ s.slot_number }}</span>
+            <span class="slot-tier">Bike</span>
+          </div>
+          {% endfor %}
+          {% for s in all_occupied_slots if s.slot_tier == 'bike' %}
+          <div class="slot-tile occupied" data-tier="bike">
+            <span class="slot-name">{{ s.slot_number }}</span>
+            <span class="slot-tier">Busy</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Car tier -->
+      <div class="tier-section" id="tier-car">
+        <div class="slot-map-label">
+          🚗 Car Slots (A–)
+          <span id="car-count"></span>
+        </div>
+        <div class="slots-container" style="margin-bottom:18px" id="car-tiles">
+          {% for s in slots if s.slot_tier == 'car' %}
+          <div class="slot-tile available"
+               data-slot-id="{{ s.id }}"
+               data-slot-name="{{ s.slot_number }}"
+               data-tier="car"
+               onclick="selectSlot(this)">
+            <span class="slot-name">{{ s.slot_number }}</span>
+            <span class="slot-tier">Car</span>
+          </div>
+          {% endfor %}
+          {% for s in all_occupied_slots if s.slot_tier == 'car' %}
+          <div class="slot-tile occupied" data-tier="car">
+            <span class="slot-name">{{ s.slot_number }}</span>
+            <span class="slot-tier">Busy</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Commercial tier -->
+      <div class="tier-section" id="tier-commercial">
+        <div class="slot-map-label">
+          🚛 Commercial Slots (C–)
+          <span id="commercial-count"></span>
+        </div>
+        <div class="slots-container" id="commercial-tiles">
+          {% for s in slots if s.slot_tier == 'commercial' %}
+          <div class="slot-tile available"
+               data-slot-id="{{ s.id }}"
+               data-slot-name="{{ s.slot_number }}"
+               data-tier="commercial"
+               onclick="selectSlot(this)">
+            <span class="slot-name">{{ s.slot_number }}</span>
+            <span class="slot-tier">Truck</span>
+          </div>
+          {% endfor %}
+          {% for s in all_occupied_slots if s.slot_tier == 'commercial' %}
+          <div class="slot-tile occupied" data-tier="commercial">
+            <span class="slot-name">{{ s.slot_number }}</span>
+            <span class="slot-tier">Busy</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div><!-- /slotMap -->
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const pricePerHour = {{ price_per_hour }};
+
+// ── Slot data from server ────────────────────────────────────────────────────
+// Which tiers are allowed per vehicle group:
+// bike  → only 'bike'
+// motor → 'car' and 'commercial'
+const GROUP_TIERS = {
+  bike:  ['bike'],
+  motor: ['car', 'commercial'],
+};
+
+// ── Count free slots per tier (for badge) ───────────────────────────────────
+function countFreeTiles(tier) {
+  return document.querySelectorAll(`.slot-tile.available[data-tier="${tier}"]`).length;
+}
+
+// ── Vehicle select handler ───────────────────────────────────────────────────
+document.getElementById('vehicleSelect').addEventListener('change', function() {
+  const opt   = this.options[this.selectedIndex];
+  const group = opt.dataset.group || '';   // 'bike' or 'motor'
+
+  clearSlot();
+
+  if (!group) {
+    document.getElementById('pickHint').style.display = '';
+    document.getElementById('slotMap').style.display  = 'none';
+    return;
+  }
+
+  const allowed = GROUP_TIERS[group] || ['car', 'commercial'];
+
+  document.getElementById('pickHint').style.display = 'none';
+  document.getElementById('slotMap').style.display  = '';
+
+  // Show / dim each tier section
+  ['bike', 'car', 'commercial'].forEach(tier => {
+    const sec = document.getElementById('tier-' + tier);
+    if (allowed.includes(tier)) {
+      sec.classList.remove('hidden', 'dimmed');
+    } else {
+      sec.classList.add('hidden');
+      sec.classList.remove('dimmed');
+    }
+  });
+
+  // Update free count badge
+  let total = 0;
+  allowed.forEach(t => total += countFreeTiles(t));
+  document.getElementById('slotCountBadge').textContent = total + ' free';
+
+  // Show counts per visible tier
+  allowed.forEach(tier => {
+    const el = document.getElementById(tier + '-count');
+    if (el) el.textContent = countFreeTiles(tier) + ' free';
+  });
+
+  updateConfirmBtn();
+});
+
+// ── Slot tile click ──────────────────────────────────────────────────────────
+function selectSlot(tile) {
+  if (tile.classList.contains('occupied')) return;
+
+  // Deselect previously selected
+  document.querySelectorAll('.slot-tile.selected').forEach(t => t.classList.remove('selected'));
+
+  tile.classList.add('selected');
+
+  const slotId   = tile.dataset.slotId;
+  const slotName = tile.dataset.slotName;
+  const tier     = tile.dataset.tier;
+
+  document.getElementById('slotIdInput').value = slotId;
+
+  // Show pill
+  const tierLabel = tier === 'bike' ? '🏍️ Bike' : tier === 'car' ? '🚗 Car' : '🚛 Commercial';
+  document.getElementById('pillText').textContent = slotName + '  ·  ' + tierLabel;
+  document.getElementById('selectedPill').classList.add('visible');
+
+  updateConfirmBtn();
+}
+
+// ── Clear slot selection ─────────────────────────────────────────────────────
+function clearSlot() {
+  document.querySelectorAll('.slot-tile.selected').forEach(t => t.classList.remove('selected'));
+  document.getElementById('slotIdInput').value = '';
+  document.getElementById('selectedPill').classList.remove('visible');
+  updateConfirmBtn();
+}
+
+// ── Enable/disable confirm button ────────────────────────────────────────────
+function updateConfirmBtn() {
+  const hasVehicle = document.getElementById('vehicleSelect').value !== '';
+  const hasSlot    = document.getElementById('slotIdInput').value   !== '';
+  const btn        = document.getElementById('confirmBtn');
+  const hint       = document.getElementById('confirmHint');
+
+  if (hasVehicle && hasSlot) {
+    btn.disabled              = false;
+    btn.style.opacity         = '1';
+    btn.style.pointerEvents   = 'auto';
+    hint.style.display        = 'none';
+  } else {
+    btn.disabled              = true;
+    btn.style.opacity         = '0.5';
+    btn.style.pointerEvents   = 'none';
+    hint.style.display        = '';
+    hint.textContent          = !hasVehicle
+      ? 'Select a vehicle to see compatible slots'
+      : 'Click a green slot on the map to select it';
+  }
+}
+
+// ── Cost calculator ──────────────────────────────────────────────────────────
+document.getElementById('hoursInput').addEventListener('input', function() {
+  const h = parseFloat(this.value) || 0;
+  document.getElementById('costDisplay').textContent = '₹' + Math.round(h * pricePerHour);
+});
+
+// Init
+updateConfirmBtn();
+</script>
+{% endblock %}

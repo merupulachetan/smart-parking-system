@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register — SmartPark</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-logo">🅿</div>
+      <h1 class="auth-title">Create Account</h1>
+      <p class="auth-subtitle">Join SmartPark today</p>
+
+      {% if error %}
+        <div class="alert alert-error">⚠️ {{ error }}</div>
+      {% endif %}
+
+      <form method="post" action="/register">
+        <div class="form-group">
+          <label>Full Name</label>
+          <input type="text" name="full_name" required placeholder="Your Name"/>
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" name="email" required placeholder="you@example.com" autocomplete="email"/>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" name="password" required placeholder="Min 8 characters" autocomplete="new-password"/>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%; justify-content:center; margin-top:8px">Create Account</button>
+      </form>
+
+      <p class="auth-link">Already have an account? <a href="/login">Sign in</a></p>
+    </div>
+  </div>
+</body>
+</html>

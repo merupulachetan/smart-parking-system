@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+{% block title %}AI Vision — SmartPark{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>🤖 AI Vision — YOLOv8 Slot Detection</h1>
+  <p>Upload a parking lot image and let the trained YOLO model detect occupied vs. free slots</p>
+</div>
+
+<!-- Upload Zone -->
+<div class="card" style="margin-bottom:20px">
+  <div class="ai-upload-zone" id="dropZone">
+    <input type="file" id="imgInput" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer">
+    <div class="ai-upload-icon">📷</div>
+    <div class="ai-upload-title">Drop parking image here</div>
+    <div class="ai-upload-sub">or click to browse · JPG, PNG, WEBP supported</div>
+  </div>
+
+  <div style="display:flex;gap:10px;margin-top:14px">
+    <button class="btn btn-primary" id="runBtn" disabled>🔍 Run AI Detection</button>
+    <button class="btn btn-secondary" id="clearBtn" style="display:none">✕ Clear</button>
+    <div style="flex:1"></div>
+    <div style="font-size:0.8rem;color:var(--text2);padding-top:10px">Model: YOLOv8n · Trained on COCO128</div>
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="loadingDiv" style="display:none;text-align:center;padding:40px">
+  <div class="spinner"></div>
+  <p style="color:var(--text2);margin-top:10px">Running YOLOv8 inference…</p>
+</div>
+
+<!-- Results -->
+<div id="resultsDiv" style="display:none">
+  <div class="ai-result-grid">
+
+    <!-- Canvas / annotated image -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <span style="font-weight:600;font-size:0.9rem">📸 Annotated Image</span>
+        <span id="modelLabel" class="card-badge">YOLOv8</span>
+      </div>
+      <div class="ai-image-canvas" style="padding:12px">
+        <canvas id="annoCanvas" style="width:100%;height:auto;border-radius:8px"></canvas>
+      </div>
+    </div>
+
+    <!-- Side panel -->
+    <div style="display:flex;flex-direction:column;gap:16px">
+
+      <!-- Stats -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">📊 Detection Stats</span></div>
+        <div class="ai-stats-list">
+          <div class="ai-stat-row">
+            <span class="ai-stat-key">Total Objects</span>
+            <span class="ai-stat-val" id="statTotal">—</span>
+          </div>
+          <div class="ai-stat-row">
+            <span class="ai-stat-key">Vehicles</span>
+            <span class="ai-stat-val" id="statVehicles" style="color:var(--accent)">—</span>
+          </div>
+          <div class="ai-stat-row">
+            <span class="ai-stat-key">Free Slots</span>
+            <span class="ai-stat-val green" id="statFree">—</span>
+          </div>
+          <div class="ai-stat-row">
+            <span class="ai-stat-key">Occupied</span>
+            <span class="ai-stat-val red" id="statOccupied">—</span>
+          </div>
+          <div class="ai-stat-row">
+            <span class="ai-stat-key">Occupancy</span>
+            <span class="ai-stat-val yellow" id="statPct">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Slot visual -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">🗺 Slot Status</span></div>
+        <div id="slotGrid" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Detection list -->
+  <div class="card" style="margin-top:20px">
+    <div class="card-header"><span class="card-title">🎯 Detected Objects</span></div>
+    <div class="detection-list" id="detectionList"></div>
+  </div>
+</div>
+
+<!-- Info box when no image loaded yet -->
+<div id="infoBox" class="card" style="border-color:rgba(124,58,237,0.25);background:rgba(124,58,237,0.04)">
+  <div style="display:flex;gap:20px;align-items:flex-start">
+    <div style="font-size:2rem">ℹ️</div>
+    <div>
+      <div style="font-weight:700;margin-bottom:8px">How the AI Vision works</div>
+      <div style="color:var(--text2);font-size:0.88rem;line-height:1.7">
+        1. Upload any parking lot photograph.<br>
+        2. YOLOv8n (your trained model <code style="color:var(--accent)">best.pt</code>) runs object detection on the image.<br>
+        3. Cars, motorcycles, trucks, and buses are detected and highlighted.<br>
+        4. Predefined parking slot regions are checked for occupancy using IoU overlap.<br>
+        5. You get a live annotated view + slot-by-slot status breakdown.
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ── Colour palette for classes ──────────────────────────────────────────────
+const CLASS_COLORS = {
+  car: '#00d4ff', truck: '#f59e0b', motorcycle: '#7c3aed',
+  bus: '#10b981', bicycle: '#ec4899', person: '#64748b', default: '#94a3b8'
+};
+const VEHICLE_CLASSES = new Set(['car','truck','motorcycle','bus','bicycle']);
+
+// ── Predefined slot layout (8 slots across a typical lot image) ─────────────
+function getSlots(W, H) {
+  const slotW = Math.round(W / 9);
+  const slotH = Math.round(H * 0.35);
+  const y1 = Math.round(H * 0.32), y2 = y1 + slotH;
+  return Array.from({length: 8}, (_, i) => {
+    const x1 = Math.round(W * 0.04) + i * (slotW + 6);
+    return [x1, y1, x1 + slotW, y2];
+  });
+}
+
+let currentImage = null;
+let currentDetections = [];
+
+const dropZone = document.getElementById('dropZone');
+const imgInput = document.getElementById('imgInput');
+const runBtn   = document.getElementById('runBtn');
+const clearBtn = document.getElementById('clearBtn');
+
+imgInput.addEventListener('change', e => loadFile(e.target.files[0]));
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); loadFile(e.dataTransfer.files[0]); });
+
+function loadFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    currentImage = ev.target.result;
+    runBtn.disabled = false;
+    clearBtn.style.display = 'inline-flex';
+    document.getElementById('infoBox').style.display = 'none';
+    dropZone.style.background = 'rgba(0,212,255,0.04)';
+    dropZone.style.borderColor = 'var(--accent)';
+    const preview = new Image();
+    preview.onload = () => { dropZone.querySelector('.ai-upload-icon').textContent = '✅'; dropZone.querySelector('.ai-upload-title').textContent = file.name; dropZone.querySelector('.ai-upload-sub').textContent = `${(file.size/1024).toFixed(0)} KB · ready`; };
+    preview.src = currentImage;
+  };
+  reader.readAsDataURL(file);
+}
+
+clearBtn.addEventListener('click', () => {
+  currentImage = null; currentDetections = [];
+  runBtn.disabled = true; clearBtn.style.display = 'none';
+  document.getElementById('resultsDiv').style.display = 'none';
+  document.getElementById('infoBox').style.display = 'block';
+  dropZone.style.borderColor = '';
+  dropZone.querySelector('.ai-upload-icon').textContent = '📷';
+  dropZone.querySelector('.ai-upload-title').textContent = 'Drop parking image here';
+  dropZone.querySelector('.ai-upload-sub').textContent = 'or click to browse · JPG, PNG, WEBP supported';
+  imgInput.value = '';
+});
+
+runBtn.addEventListener('click', async () => {
+  if (!currentImage) return;
+  runBtn.disabled = true;
+  document.getElementById('loadingDiv').style.display = 'block';
+  document.getElementById('resultsDiv').style.display = 'none';
+
+  try {
+    const res = await fetch('/api/yolo-detect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({image: currentImage})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Detection failed');
+    renderResults(data);
+  } catch(err) {
+    alert('Error: ' + err.message);
+  } finally {
+    document.getElementById('loadingDiv').style.display = 'none';
+    runBtn.disabled = false;
+  }
+});
+
+function renderResults(data) {
+  const detections = data.detections || [];
+  currentDetections = detections;
+
+  // Draw on canvas
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.getElementById('annoCanvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+
+    const slots = getSlots(img.naturalWidth, img.naturalHeight);
+
+    // Draw detections
+    detections.forEach(d => {
+      const [x1,y1,x2,y2] = d.box;
+      const col = CLASS_COLORS[d.name] || CLASS_COLORS.default;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x1, y1, x2-x1, y2-y1);
+      ctx.fillStyle = col + 'cc';
+      ctx.fillRect(x1, y1-22, ctx.measureText(`${d.name} ${Math.round(d.conf*100)}%`).width + 10, 22);
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 13px JetBrains Mono, monospace';
+      ctx.fillText(`${d.name} ${Math.round(d.conf*100)}%`, x1+5, y1-6);
+    });
+
+    // Draw slots
+    const vehicleBoxes = detections.filter(d => VEHICLE_CLASSES.has(d.name)).map(d => d.box);
+    const slotResults = slots.map((slot, i) => {
+      const occ = isOccupied(slot, vehicleBoxes);
+      const [sx1,sy1,sx2,sy2] = slot;
+      ctx.strokeStyle = occ ? '#ef4444' : '#10b981';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6,4]);
+      ctx.strokeRect(sx1, sy1, sx2-sx1, sy2-sy1);
+      ctx.setLineDash([]);
+      ctx.fillStyle = (occ ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.1)');
+      ctx.fillRect(sx1, sy1, sx2-sx1, sy2-sy1);
+      ctx.fillStyle = occ ? '#ef4444' : '#10b981';
+      ctx.font = 'bold 11px JetBrains Mono, monospace';
+      ctx.fillText(`S${i+1}`, sx1+4, sy2-6);
+      return occ;
+    });
+
+    // Stats
+    const totalVeh = detections.filter(d => VEHICLE_CLASSES.has(d.name)).length;
+    const occupied = slotResults.filter(Boolean).length;
+    const free = slotResults.length - occupied;
+    const pct = slotResults.length > 0 ? Math.round((occupied / slotResults.length)*100) : 0;
+
+    document.getElementById('statTotal').textContent = detections.length;
+    document.getElementById('statVehicles').textContent = totalVeh;
+    document.getElementById('statFree').textContent = free;
+    document.getElementById('statOccupied').textContent = occupied;
+    document.getElementById('statPct').textContent = pct + '%';
+
+    // Slot grid
+    const slotGrid = document.getElementById('slotGrid');
+    slotGrid.innerHTML = slotResults.map((occ, i) =>
+      `<div class="slot-box ${occ?'occ':'free'}">S${i+1}<br><span style="font-size:0.58rem">${occ?'OCC':'FREE'}</span></div>`
+    ).join('');
+
+    // Detection list
+    const dl = document.getElementById('detectionList');
+    if (detections.length === 0) {
+      dl.innerHTML = '<div class="empty-state"><div class="empty-icon">🔎</div><p>No objects detected</p></div>';
+    } else {
+      dl.innerHTML = detections.map(d => {
+        const col = CLASS_COLORS[d.name] || CLASS_COLORS.default;
+        const cls = VEHICLE_CLASSES.has(d.name) ? d.name : 'other';
+        return `<div class="detection-item">
+          <div class="detection-dot ${cls}" style="background:${col}"></div>
+          <span style="font-weight:600;text-transform:capitalize">${d.name}</span>
+          <span style="color:var(--text2);font-size:0.78rem">box: [${d.box.map(v=>Math.round(v)).join(', ')}]</span>
+          <span class="detection-conf">${Math.round(d.conf*100)}%</span>
+        </div>`;
+      }).join('');
+    }
+  };
+  img.src = currentImage;
+
+  document.getElementById('resultsDiv').style.display = 'block';
+}
+
+function isOccupied(slot, vehicleBoxes, threshold=0.3) {
+  const [x1,y1,x2,y2] = slot;
+  const slotArea = (x2-x1)*(y2-y1);
+  for (const box of vehicleBoxes) {
+    const [bx1,by1,bx2,by2] = box;
+    const ix1=Math.max(x1,bx1), iy1=Math.max(y1,by1), ix2=Math.min(x2,bx2), iy2=Math.min(y2,by2);
+    if (ix1 < ix2 && iy1 < iy2) {
+      if ((ix2-ix1)*(iy2-iy1)/slotArea > threshold) return true;
+    }
+  }
+  return false;
+}
+</script>
+{% endblock %}

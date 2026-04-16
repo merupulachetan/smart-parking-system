@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Wallet — SmartPark{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>💳 Wallet</h1>
+  <p>Manage your parking credits</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">⚠️ {{ error }}</div>
+{% endif %}
+
+<div class="grid-2">
+  <div class="card" style="border-color:rgba(124,58,237,0.3);background:linear-gradient(135deg,rgba(124,58,237,0.08) 0%,var(--surface) 60%)">
+    <div style="font-size:0.8rem;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;font-weight:600">Current Balance</div>
+    <div style="font-size:3rem;font-weight:800;font-family:var(--mono);letter-spacing:-0.04em;margin:10px 0;color:var(--accent2)">₹{{ "%.2f"|format(user.wallet_balance) }}</div>
+    <div style="font-size:0.82rem;color:var(--text2)">Available for parking</div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Top Up Balance</span></div>
+    <form method="post" action="/wallet/topup">
+      <div class="form-group">
+        <label>Amount (₹)</label>
+        <input type="number" name="amount" min="10" max="10000" step="10" placeholder="e.g. 500" required/>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:18px">
+        {% for amt in [100, 200, 500, 1000] %}
+        <button type="button" class="btn btn-secondary btn-sm" onclick="document.querySelector('[name=amount]').value={{ amt }}">₹{{ amt }}</button>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">Add Funds</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

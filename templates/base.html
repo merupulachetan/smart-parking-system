@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}SmartPark{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <span class="logo-icon">🅿</span>
+        <span class="logo-text">SmartPark</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="/dashboard" class="nav-item {% if request.url.path == '/dashboard' %}active{% endif %}">
+          <span class="nav-icon">⊞</span> Dashboard
+        </a>
+        <a href="/ai-vision" class="nav-item {% if request.url.path == '/ai-vision' %}active{% endif %}">
+          <span class="nav-icon">🤖</span> AI Vision
+        </a>
+        <a href="/predictions/view" class="nav-item {% if request.url.path == '/predictions/view' %}active{% endif %}">
+          <span class="nav-icon">📈</span> Predictions
+        </a>
+        <a href="/book" class="nav-item {% if request.url.path == '/book' %}active{% endif %}">
+          <span class="nav-icon">＋</span> Book Slot
+        </a>
+        <a href="/vehicles" class="nav-item {% if request.url.path == '/vehicles' %}active{% endif %}">
+          <span class="nav-icon">🚗</span> Vehicles
+        </a>
+        <a href="/wallet" class="nav-item {% if request.url.path == '/wallet' %}active{% endif %}">
+          <span class="nav-icon">💳</span> Wallet
+        </a>
+        <a href="/history" class="nav-item {% if request.url.path == '/history' %}active{% endif %}">
+          <span class="nav-icon">🕐</span> History
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="user-avatar">{{ user.full_name[0].upper() if user and user.full_name else "U" }}</div>
+          <div class="user-info">
+            <span class="user-name">{{ user.full_name if user else "User" }}</span>
+            <span class="user-email">{{ user.email if user else "" }}</span>
+          </div>
+        </div>
+        <form action="/logout" method="post" style="margin-top:8px">
+          <button type="submit" class="logout-btn">Sign out</button>
+        </form>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main-content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script src="/static/js/app.js"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

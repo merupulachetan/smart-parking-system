@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Booking #{{ booking.id }} — SmartPark{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>🅿 Booking #{{ booking.id }}</h1>
+  <p>Booking details and QR code</p>
+</div>
+
+<div style="max-width:560px; margin:0 auto;">
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Booking Details</span>
+      {% if booking.status == 'active' %}
+        <span class="badge badge-active">Active</span>
+      {% elif booking.status == 'completed' %}
+        <span class="badge badge-completed">Completed</span>
+      {% else %}
+        <span class="badge badge-cancelled">Cancelled</span>
+      {% endif %}
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
+      <div style="background:var(--glass-light);backdrop-filter:var(--blur-light);-webkit-backdrop-filter:var(--blur-light);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:4px;">🅿 Slot</div>
+        <div style="font-family:var(--mono);font-size:1.2rem;font-weight:800;color:var(--accent-dark);">{{ booking.slot.slot_number if booking.slot else '—' }}</div>
+      </div>
+      <div style="background:var(--glass-light);backdrop-filter:var(--blur-light);-webkit-backdrop-filter:var(--blur-light);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:4px;">🚗 Vehicle</div>
+        <div style="font-family:var(--mono);font-size:1rem;font-weight:800;color:var(--text);">{{ booking.vehicle.plate_number if booking.vehicle else '—' }}</div>
+      </div>
+      <div style="background:var(--glass-light);backdrop-filter:var(--blur-light);-webkit-backdrop-filter:var(--blur-light);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:4px;">🕐 Start</div>
+        <div style="font-family:var(--mono);font-size:0.85rem;font-weight:700;color:var(--text);">{{ start_local }}</div>
+      </div>
+      <div style="background:var(--glass-light);backdrop-filter:var(--blur-light);-webkit-backdrop-filter:var(--blur-light);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:4px;">🕔 End</div>
+        <div style="font-family:var(--mono);font-size:0.85rem;font-weight:700;color:var(--text);">{{ end_local }}</div>
+      </div>
+      <div style="background:var(--glass-light);backdrop-filter:var(--blur-light);-webkit-backdrop-filter:var(--blur-light);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:4px;">💰 Rate</div>
+        <div style="font-family:var(--mono);font-size:1rem;font-weight:800;color:var(--text);">₹{{ "%.0f"|format(booking.price_per_hour) }}/hr</div>
+      </div>
+      <div style="background:var(--glass-light);backdrop-filter:var(--blur-light);-webkit-backdrop-filter:var(--blur-light);border:1px solid var(--border);border-radius:12px;padding:14px 16px;">
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-bottom:4px;">🧾 Total Paid</div>
+        <div style="font-family:var(--mono);font-size:1rem;font-weight:800;color:var(--green);">₹{{ "%.2f"|format(booking.base_price) }}</div>
+      </div>
+    </div>
+
+    {% if qr_url %}
+    <div style="display:flex;flex-direction:column;align-items:center;padding:20px;background:var(--glass-light);backdrop-filter:var(--blur-light);-webkit-backdrop-filter:var(--blur-light);border:1px solid var(--border);border-radius:16px;margin-bottom:20px;">
+      <img src="{{ qr_url }}" alt="QR Code" style="width:160px;height:160px;border-radius:12px;border:3px solid rgba(14,165,233,0.25);"/>
+      <div style="font-size:0.78rem;color:var(--text2);margin-top:10px;">📱 Show at parking entrance</div>
+    </div>
+    {% endif %}
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="/dashboard" class="btn btn-primary" style="flex:1;justify-content:center;">⊞ Dashboard</a>
+      <a href="/history"   class="btn btn-secondary" style="flex:1;justify-content:center;">🕐 History</a>
+      {% if booking.status == 'active' %}
+      <form method="post" action="/exit/{{ booking.id }}" style="flex:1;">
+        <button type="submit" class="btn btn-danger" style="width:100%;justify-content:center;">🚗 Exit Now</button>
+      </form>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}

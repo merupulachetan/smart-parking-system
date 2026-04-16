@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Predictions — SmartPark{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>📈 AI Demand Predictions</h1>
+  <p>LSTM model · Booking demand forecast · Timezone: {{ tz_label }}</p>
+</div>
+
+<div class="grid-2" style="margin-bottom:20px">
+  <!-- Line chart -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Demand Forecast (Next 6h)</span><span class="card-badge">LSTM</span></div>
+    <div class="chart-container">
+      <canvas id="forecastChart"></canvas>
+    </div>
+  </div>
+  <!-- Pie chart -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Vehicle Mix</span></div>
+    <div class="chart-container">
+      <canvas id="pieChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Prediction rows -->
+<div class="card">
+  <div class="card-header"><span class="card-title">Hour-by-Hour Breakdown</span></div>
+  {% set maxval = chart_values | max if chart_values else 1 %}
+  {% for p in predictions %}
+  <div class="pred-row">
+    <span class="pred-hour">{{ p.hour }}</span>
+    <div class="pred-bar-wrap">
+      <div class="pred-bar" style="width:{{ ((p.predicted / [maxval, 0.001]|max) * 100)|int }}%"></div>
+    </div>
+    <span class="pred-val">{{ "%.1f"|format(p.predicted) }}</span>
+    <span class="{{ 'demand-high' if p.demand == 'High Demand' else 'demand-low' }}" style="margin-left:10px">{{ p.demand }}</span>
+  </div>
+  {% else %}
+  <div class="empty-state"><div class="empty-icon">📊</div><p>No prediction data yet. Create some bookings to train the model.</p></div>
+  {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const forecastCtx = document.getElementById('forecastChart').getContext('2d');
+new Chart(forecastCtx, {
+  type: 'line',
+  data: {
+    labels: {{ chart_labels | tojson }},
+    datasets: [{
+      label: 'Predicted Demand',
+      data: {{ chart_values | tojson }},
+      borderColor: '#00d4ff', backgroundColor: 'rgba(0,212,255,0.1)',
+      tension: 0.4, fill: true, pointRadius: 5, pointBackgroundColor: '#00d4ff',
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#8892a4' } } },
+    scales: {
+      x: { ticks: { color: '#8892a4' }, grid: { color: '#1e2330' } },
+      y: { ticks: { color: '#8892a4' }, grid: { color: '#1e2330' } }
+    }
+  }
+});
+
+const pieCtx = document.getElementById('pieChart').getContext('2d');
+new Chart(pieCtx, {
+  type: 'doughnut',
+  data: {
+    labels: {{ pie_labels | tojson }},
+    datasets: [{ data: {{ pie_values | tojson }}, backgroundColor: ['#00d4ff','#7c3aed','#10b981','#f59e0b','#ef4444'], borderColor: '#111318', borderWidth: 3 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom', labels: { color: '#8892a4', padding: 16, font: { size: 12 } } } }
+  }
+});
+</script>
+{% endblock %}

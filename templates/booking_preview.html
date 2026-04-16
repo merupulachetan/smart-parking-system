@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Booking Preview — SmartPark{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>👁 Booking Preview</h1>
+  <p>Booking #{{ booking.id }} — {{ tz_label }}</p>
+</div>
+
+<div style="max-width:560px; margin:0 auto;">
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Booking Summary</span>
+      {% if booking.status == 'active' %}
+        <span class="badge badge-active">Active</span>
+      {% elif booking.status == 'completed' %}
+        <span class="badge badge-completed">Completed</span>
+      {% else %}
+        <span class="badge badge-cancelled">Cancelled</span>
+      {% endif %}
+    </div>
+
+    <table>
+      <tr><td style="color:var(--text3);font-size:0.82rem;">Slot</td>
+          <td style="font-family:var(--mono);font-weight:800;color:var(--accent-dark);">{{ booking.slot.slot_number if booking.slot else '—' }}</td></tr>
+      <tr><td style="color:var(--text3);font-size:0.82rem;">Vehicle</td>
+          <td style="font-family:var(--mono);font-weight:700;">{{ booking.vehicle.plate_number if booking.vehicle else '—' }}</td></tr>
+      <tr><td style="color:var(--text3);font-size:0.82rem;">Start</td>
+          <td style="font-size:0.85rem;">{{ start_local }}</td></tr>
+      <tr><td style="color:var(--text3);font-size:0.82rem;">End</td>
+          <td style="font-size:0.85rem;">{{ end_local }}</td></tr>
+      <tr><td style="color:var(--text3);font-size:0.82rem;">Rate</td>
+          <td style="font-family:var(--mono);">₹{{ "%.0f"|format(booking.price_per_hour) }}/hr</td></tr>
+      <tr><td style="color:var(--text3);font-size:0.82rem;">Paid</td>
+          <td style="font-family:var(--mono);font-weight:800;color:var(--green);">₹{{ "%.2f"|format(booking.base_price) }}</td></tr>
+    </table>
+
+    {% if qr_url %}
+    <div style="display:flex;flex-direction:column;align-items:center;padding:16px;background:var(--glass-light);backdrop-filter:var(--blur-light);-webkit-backdrop-filter:var(--blur-light);border:1px solid var(--border);border-radius:14px;margin:20px 0;">
+      <img src="{{ qr_url }}" alt="QR" style="width:140px;height:140px;border-radius:10px;border:2px solid rgba(14,165,233,0.25);"/>
+      <div style="font-size:0.75rem;color:var(--text2);margin-top:8px;">📱 Entry QR Code</div>
+    </div>
+    {% endif %}
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <a href="/dashboard" class="btn btn-primary" style="flex:1;justify-content:center;">⊞ Dashboard</a>
+      <a href="/history"   class="btn btn-secondary" style="flex:1;justify-content:center;">🕐 History</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
